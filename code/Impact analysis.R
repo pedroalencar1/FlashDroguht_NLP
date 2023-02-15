@@ -173,18 +173,10 @@ list_impacts_2[[20]] |>
 # 4. Aggregate FD in nuts level -------------------------------------------
 
 fd_brick <- terra::rast("files/germany_fd_pentad.nc") 
-  filter(lubridate::year(time(.)) >= 2000)
-  
 fd_brick_impact <- fd_brick[[which(lubridate::year(time(fd_brick)) >= 2000)]]
 
-fd_brick_impact[[1]] |> plot()
+# fd_brick_impact[[1]] |> plot()
 
-r.vals <- terra::aggregate(shape_nuts_2, fd_brick_impact, fun = "mean",
-                           dissolve = F)
-
-
-  
-  
 shape_fd <- terra::extract(fd_brick_impact, shape_nuts_2, 
                         fun = "mean", na.rm = T, 
                         exact = T)|>
