@@ -16,6 +16,7 @@ library(terra)
 library(tictoc)
 library(ggplot2)
 library(terra)
+library(plotly)
 
 # impacts dataset
 impact_data <- data.table::fread("data/extracted_impacts_daily_12_12_2022.csv") |>
@@ -160,15 +161,16 @@ for (i in 1:nrow(all_impacts_2)){
 toc()
 
 all_impacts_2$ratio[is.na(all_impacts_2$ratio)] <- 0 #remove NA
+all_impacts_2 %<>%
+  rename(imp_ratio = ratio) %>%
+  rename(date = day)
+
+
+
 st_write(all_impacts_2, "files/impact_nuts2_week_complete.shp")
 
 # get data into list
 list_impacts_2 <- split(all_impacts_2, f = all_impacts_2$day)
-
-list_impacts_2[[20]] |> 
-  select(ratio, geometry)|>
-  plot()
-
 
 # 4. Aggregate FD in nuts level -------------------------------------------
 
@@ -201,4 +203,69 @@ data.table::fwrite(shape_fd_series, "files/fd_series_by_nuts_2.csv")
     - Auto correlation and time series analysis
 "
 
+shape_nuts_2 <- shape_nuts |> 
+  filter(LEVL_CODE ==2) |> View()
+  select(NUTS_ID, geometry)
+
+
+fd_shape <- shape_nuts_2 |> 
+  full_join(y = shape_fd_series, by = c("NUTS_ID" = "nuts_id")) |>
+  rename("nuts_id" = "NUTS_ID")
+
+
+full_series <- expand_grid(nuts_id = unique(fd_shape$nuts_id), 
+                           date = seq.Date(as.Date("2000-01-01"),
+                                           as.Date("2021-12-31"),
+                                           by = "day")) |>
+  left_join(fd_shape, by = c("nuts_id", "date")) |>
+  left_join(all_impacts_2, by = c("nuts_id", "date")) |>
+  select(-c(geometry.x,geometry.y))|>
+  tidyr::fill(fd_ratio:imp_ratio, .direction = "down") |>
+  mutate(imp_ratio = imp_ratio*1e4) #impact per 10k articles
+
+data.table::fwrite(full_series, file = "files/full_series.csv")
+
+full_series |>
+  filter(lubridate::year(date) %in% 2002:2004,
+         nuts_id == "DE40") |>
+  pivot_longer(3:4, names_to = "ratio", values_to = "value") |>
+  ggplot(aes(x = date, y = value, color = ratio))+
+  geom_path(size = 1)+
+  theme_bw()
+
+full_series_bbr <- full_series |>
+  filter(nuts_id == "DE40") 
+
+fig <- plot_ly(full_series_bbr, 
+               x = ~date, 
+               y = ~fd_ratio, 
+               name = 'FD prevalence', 
+               type = 'scatter', 
+               mode = 'lines',
+               yaxis = "y1") |>
+  add_trace(y = ~imp_ratio, 
+            name = 'Impacts', 
+            type = 'scatter', 
+            mode = 'lines',
+            yaxis = "y2") |>
+  layout(
+    title = "Flash droghts and news media impacts - Brandenburg", 
+    yaxis2 = list(overlaying = "y",
+                  side = "right",
+                  title = "Impact (per 10k articles)",
+                  position = 0.95,
+                  dtick = 0.03,
+                  range = c(0,0.15)
+                  ),
+    xaxis = list(title="Date",
+                 domain = c(0, 0.95)),
+    yaxis = list(title="FD prevalence",
+                 dtick = 0.1,
+                 range = c(0, 0.5)
+                 )
+  )
+  
+
+# fig <- fig %>% add_trace(y = ~trace_2, name = 'trace 2', mode = 'markers')
+fig
 

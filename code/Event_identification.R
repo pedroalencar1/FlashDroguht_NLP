@@ -274,7 +274,7 @@ for (id in ids){
 imgs <- list.files("./figs/maps_2018", full.names = TRUE)
 img_list <- lapply(imgs, magick::image_read)
 img_joined <- magick::image_join(img_list)
-img_animated <- magick::image_animate(img_joined, fps = 2)
+img_animated <- magick::image_animate(img_joined, fps = 5)
 
 img_animated
 
