@@ -33,9 +33,9 @@ shape_nuts_2 <- sf::read_sf("./data/GIS/nuts2.shp")
 
 factpal <- colorFactor(hcl.colors(4, palette = "Dark 3"), shape_nuts_2$NUTS_ID)
 pal_1 <- brewer.pal(n = 7, name = 'YlOrRd')[c(7,4,2)]
+pal_2 <- brewer.pal(n = 5, name = 'Set3')
 
-
-full_series <- data.table::fread("files/full_series.csv")
+full_series <- readRDS("files/full_series.RData")
 
 regions <- sort(unique(shape_nuts_2$NUTS_NAME))
 
@@ -72,12 +72,17 @@ ui <- fluidPage(
         max = 2021,
         value = c(2003, 2006)
       ),
+      h4("Plot option"),
+      radioButtons("plot_", " ", 
+                   choices = list("Perception summary" = 1, 
+                                  "Perception discretisation" = 2),
+                   selected = 1),
     ),
     # show map with states and production values ----
     column(3, offset = 0, #
            leafletOutput("Map1")),
     column(7, offset = 0,
-           plotlyOutput("graph1"))
+           plotlyOutput("graph1")),
   ),
   br(),
   br(),
@@ -99,11 +104,14 @@ ui <- fluidPage(
                                "Impact assessment from news articles gently provided by ",
                                tags$a(href="https://www.ufz.de/index.php?en=46549", 
                                       "Dr. Mariana M. de Brito"),
+                               " and ", 
+                               tags$a(href="https://jsodoge.eu/", 
+                                      "MSc. Jan Sodoge"),
                                tags$br(),
                                "Author:", tags$a(href="https://www.tu.berlin/oekohydro/team/pedro-alencar/", "Pedro Alencar"),
                                tags$a(href="https://orcid.org/0000-0001-6221-8580", "(0000-0001-6221-8580)"),
                                tags$br(),
-                               "Berlin, 23.02.2023"
+                               "Berlin, 01.03.2023"
                             )
                             ),
                      )
@@ -169,6 +177,7 @@ server <- function(input, output, session) {
     
     region <- input$region_
     range <- input$year_
+    plot_type <- input$plot_
     # 
     # region = "Berlin"
     # range = c(2003, 2005)
@@ -186,6 +195,62 @@ server <- function(input, output, session) {
     max_imp <-  ceiling(max(plot_series$imp_ratio)*100)  %>%
       divide_by(100)
     
+    if (plot_type == 1) {
+      output$graph1 <- renderPlotly({
+        
+        plot_ly(plot_series, x = ~as.factor(date)) %>%
+          add_lines(
+            y = ~fd_ratio,
+            name = "FD prevalence",
+            yaxis = "y1",
+            line = list(color = pal_1[1])
+          )  %>%
+          add_bars(
+            y = ~imp_ratio,
+            name = "Perception",
+            yaxis = "y2",
+            marker = list(color = pal_1[2])
+          )  %>%
+          layout(
+            title = paste0("Flash drought prevalence and perception in ", region),
+            xaxis = list(
+              title = "Year",
+              domain = c(0, 0.95),
+              # type = "date",
+              tickmode = "auto",
+              nticks = 20,
+              dtick = "M1",
+              ticks = "outside"
+            ),
+            yaxis = list(
+              title = "Prevalence (-)",
+              side = "left",
+              color = "black",
+              position = 0,
+              anchor = "free",
+              rangemode="tozero",
+              scaleanchor='y', scaleratio=1, constraintoward='bottom', secondary_y=T,
+              range = c(0, max_fd),
+              nticks = 4
+              # dticks = 0.1
+            ),
+            yaxis2 = list(
+              title = "Perception (-)",
+              side = "right",
+              color = "black",
+              overlaying = "y",
+              anchor = "free",
+              position = 0.95,
+              rangemode="tozero",
+              scaleanchor='y2',scaleratio=1, constraintoward='bottom', secondary_y=F,
+              range = c(0, max_imp),
+              nticks = 4
+              # dticks = 0.01
+            ),
+            showlegend = T
+          )
+      })
+    } else {
     output$graph1 <- renderPlotly({
       
       plot_ly(plot_series, x = ~as.factor(date)) %>%
@@ -199,8 +264,35 @@ server <- function(input, output, session) {
           y = ~imp_ratio,
           name = "Perception",
           yaxis = "y2",
-          line = list(color = pal_1[2])
+          line = list(color = "darkgrey",
+                      # alpha = 0.6,
+                      width = 0.2)
         )  %>%
+        add_bars(y = ~agriculture*10000,
+                 name = "agriculture",
+                 width = 1,
+                 yaxis = "y2",
+                 marker = list(color = pal_2[1])) %>%
+        add_bars(y = ~energy*10000,
+                 name = "energy",
+                 width = 1,
+                 yaxis = "y2",
+                 marker = list(color = pal_2[2])) %>%
+        add_bars(y = ~social*10000,
+                 name = "social",
+                 width = 1,
+                 yaxis = "y2",
+                 marker = list(color = pal_2[3])) %>%
+        add_bars(y = ~fire*10000,
+                 name = "fire",
+                 width = 1,
+                 yaxis = "y2",
+                 marker = list(color = pal_2[4])) %>%
+        add_bars(y = ~livestock*10000,
+                 name = "livestock",
+                 width = 1,
+                 yaxis = "y2",
+                 marker = list(color = pal_2[5])) %>%
         layout(
           title = paste0("Flash drought prevalence and perception in ", region),
           xaxis = list(
@@ -237,10 +329,11 @@ server <- function(input, output, session) {
             nticks = 4
             # dticks = 0.01
           ),
+          barmode = "stack",
           showlegend = T
         )
     })
-    
+    }
     
     
     # # Button
