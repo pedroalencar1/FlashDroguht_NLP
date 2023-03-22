@@ -18,7 +18,7 @@ library(ggplot2)
 library(terra)
 library(plotly)
 
-source("../../@R scripts/Unilities.R")
+source("../../@R scripts/Utilities.R")
 
 # impacts dataset
 impact_data <- data.table::fread("data/extracted_impacts_daily_12_12_2022.csv") |>
@@ -296,5 +296,5 @@ fig <- plot_ly(full_series_bbr,
   
 
 # fig <- fig %>% add_trace(y = ~trace_2, name = 'trace 2', mode = 'markers')
-fig
+# fig
 
