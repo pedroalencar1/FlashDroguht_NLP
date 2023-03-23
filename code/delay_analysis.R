@@ -158,25 +158,52 @@ for (i in 1:(22*38)){
 }
 # View(all_lags)
 
+colors <- c("Histogram" = "#999999", 
+            "Empiric PDF" = "#000000", 
+            "Baseline" = "blue")
+
+
 all_lags |>
   filter(lag > 0) |>
   mutate(lag = lag - lag_max) |>
   ggplot(aes(x = lag-1))+
-  geom_histogram(aes(y = after_stat(density)),bins = (2*lag_max+1)) +
-  geom_density(adjust = 1/2.5)+
-  geom_hline(yintercept = 0.015, 
-             color = "blue",
+  geom_histogram(aes(y = after_stat(density),
+                     fill = "Histogram"),
+                 bins = (2*lag_max+1), 
+                 color = "#999999") +
+  geom_density(aes(color = "Empiric PDF"),
+               adjust = 1/2.5)+
+  geom_hline(aes(color = "Baseline",
+                 yintercept = 0.015), 
              linetype="dotdash",
              linewidth = 1)+
-  scale_y_continuous(expand = c(0,0), limits = c(0, 0.09), breaks = seq(0,0.09, 0.03))+
-  scale_x_continuous(expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0), 
+                     limits = c(0, 0.1),
+                     breaks = seq(0,0.2, 0.02))+
+  scale_x_continuous(expand = c(0,0),
+                     breaks = seq(-20,20,5))+
+  scale_color_manual("Legend",values = colors)+
+  scale_fill_manual("", values=colors)+
   labs(x = "Delay (weeks)",
        y = "Density",
        title = "Distribution of delay between FD onset and impact perception",
-       caption = "Delay measured in weeks. \nNegative delays indicate baseline concern on droughts")+
-  theme_bw()
+       caption = "Delay measured in weeks.
+                  Negative delays indicate baseline concern on droughts (blue line).",
+       tag = "Legend")+
+  theme_bw()+
+  theme(legend.position = 'right', 
+        legend.spacing.x = unit(0.2, 'cm'),
+        legend.spacing.y = unit(-0.2, 'cm'),
+        legend.text = element_text(margin = margin(t = 0)),
+        legend.title = element_blank(),
+        plot.tag = element_text(size = 11),
+        plot.tag.position = c(0.895, 0.67),
+        legend.box.spacing = unit(0.2, "cm"),
+        panel.grid.minor = element_blank())
 
-all_lags |>
+ggsave("figs/delay_germany.png", width = 20, height = 12, units = "cm")
+
+  all_lags |>
   filter(unit == "DE40")|>
   filter(lag > 0) |>
   mutate(lag = lag - lag_max) |>
