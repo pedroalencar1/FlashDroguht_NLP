@@ -17,6 +17,7 @@ library(tictoc)
 library(ggplot2)
 library(terra)
 library(plotly)
+library(sf)
 
 source("../../@R scripts/Utilities.R")
 
@@ -250,7 +251,7 @@ full_series <- expand_grid(nuts_id = unique(fd_shape$nuts_id),
   tidyr::fill(fd_ratio:imp_ratio, .direction = "down") |>
   mutate(imp_ratio = imp_ratio*1e4) #impact per 10k articles
 
-saveRDS(full_series, file = "files/full_series.RData")
+saveRDS(full_series, file = "files/full_series_lvl2.RData")
 
 # data.table::fwrite(full_series, file = "files/full_series.csv")
 
@@ -295,6 +296,185 @@ fig <- plot_ly(full_series_bbr,
   )
   
 
-# fig <- fig %>% add_trace(y = ~trace_2, name = 'trace 2', mode = 'markers')
-# fig
+# REDO IN NUTS1 LEVEL -----------------------------------------------------
+# __________________-----------------------------------------------------------
+# 6. aggregate impacts to lvl1 ------------------------------------------------
 
+impacts_sep_fd_lvl1 <- impact_sep_fd_lvl3 |>
+  ungroup()|>
+  mutate(nuts_id = substr(nuts_id, 1, 3))|>
+  group_by(year, week, nuts_id, type_of_class) |>
+  summarise_at(vars(n), sum) |>
+  left_join(number_of_articles_wiso_db) |>
+  mutate(ratio = n/articles) |>
+  select(-c(articles,n)) |>
+  pivot_wider(names_from = "type_of_class",
+              values_from = "ratio") |>
+  mutate(across(energy:livestock, ~ifelse(is.na(.x), 0, .x)),
+         ratio = energy+social+agriculture+fire+livestock)
+
+# get shape of all nuts_1
+shape_nuts_1 <- shape_nuts|> 
+  filter(LEVL_CODE == 1) |>
+  select(NUTS_ID, geometry)|>
+  magrittr::set_names(c("nuts_id", "geometry"))
+
+# gat impact info into shape
+shape_impacts_1 <- full_join(x = shape_nuts_1, 
+                             y = impacts_sep_fd_lvl1) |>
+  # select(nuts_id,geometry,year, week, ratio) |>
+  filter(week <= 52) |>
+  mutate(jday = 1+7*(week-1), 
+         day = julian_to_date(jday, year)) |>
+  select(-c(year, week, jday))
+
+sf::st_write(shape_impacts_2, "files/impact_nuts1_week_multi_impact.shp")
+
+# __Complete list of shapes by week ---------------------------------------
+
+all_shapes <- expand_grid(nuts_id = unique(shape_impacts_1$nuts_id),
+                          year = 2000:2021,
+                          week = 1:52) |>
+  mutate(jday = 1+7*(week-1), 
+         day = julian_to_date(jday, year)) |>
+  select(nuts_id, day)
+
+all_impacts_1 <- full_join(x = shape_impacts_1,
+                           y = all_shapes, 
+                           by = c("nuts_id", "day"))
+
+all_impacts_1 <- all_impacts_1 |>
+  ungroup()|>
+  as.data.frame() |>
+  select(-geometry) |>
+  left_join(shape_nuts_1, by = c("nuts_id" = "nuts_id")) |>
+  mutate(across(energy:ratio, ~ifelse(is.na(.x), 0, .x)))|>
+  rename(imp_ratio = ratio) |>
+  rename(date = day)
+
+st_write(all_impacts_1, "files/impact_nuts1_week_complete_multi_impact.shp",
+         delete_dsn = TRUE)
+
+# get data into list
+list_impacts_1 <- split(all_impacts_1, f = all_impacts_1$date)
+
+# 7. Aggregate FD in nuts level -------------------------------------------
+
+fd_brick <- terra::rast("files/germany_fd_pentad.nc") 
+fd_brick_impact <- fd_brick[[which(lubridate::year(terra::time(fd_brick)) >= 2000)]]
+
+# fd_brick_impact[[1]] |> terra::plot()
+
+shape_fd <- terra::extract(fd_brick_impact, shape_nuts_1, 
+                           fun = "mean", na.rm = T, 
+                           exact = T)|>
+  mutate(nuts_id = shape_nuts_1$NUTS_ID) |>
+  select(-ID)
+
+# View(shape_fd)
+
+shape_fd_series_lvl1 <- shape_fd |>
+  magrittr::set_names(c(as.character(terra::time(fd_brick_impact)), "nuts_id"))|>
+  pivot_longer(cols=1:1606,
+               names_to = "date",
+               values_to = "fd_ratio")|>
+  mutate(date = as.Date(date))
+
+data.table::fwrite(shape_fd_series_lvl1, "files/fd_series_by_nuts_1.csv")
+
+
+# 8. Join fd and impact ---------------------------------------------------
+
+"
+    - Join fd ratio and impact ratio into single dataframe with complete dates.
+    - aggregate into weeks
+    - Auto correlation and time series analysis
+"
+
+shape_nuts_1 <- shape_nuts |> 
+  filter(LEVL_CODE ==1) |> 
+  select(NUTS_ID, geometry)
+
+
+fd_shape <- shape_nuts_1 |> 
+  full_join(y = shape_fd_series_lvl1, by = c("NUTS_ID" = "nuts_id")) |>
+  rename("nuts_id" = "NUTS_ID")
+
+
+full_series <- expand_grid(nuts_id = unique(fd_shape$nuts_id), 
+                           date = seq.Date(as.Date("2000-01-01"),
+                                           as.Date("2021-12-31"),
+                                           by = "day")) |>
+  left_join(fd_shape, by = c("nuts_id", "date")) |>
+  left_join(all_impacts_1, by = c("nuts_id", "date")) |>
+  select(-c(geometry.x,geometry.y))|> 
+  tidyr::fill(fd_ratio:imp_ratio, .direction = "down") |>
+  mutate(imp_ratio = imp_ratio*1e4) #impact per 10k articles
+
+saveRDS(full_series, file = "files/full_series_lvl1.RData")
+
+# data.table::fwrite(full_series, file = "files/full_series.csv")
+
+full_series |>
+  filter(lubridate::year(date) %in% 2002:2004,
+         nuts_id == "DE4") |>
+  pivot_longer(3:4, names_to = "ratio", values_to = "value") |>
+  ggplot(aes(x = date, y = value, color = ratio))+
+  geom_path(size = 1)+
+  theme_bw()
+
+full_series_bbr <- full_series |>
+  filter(nuts_id == "DE4") 
+
+fig <- plot_ly(full_series_bbr, 
+               x = ~date, 
+               y = ~fd_ratio, 
+               name = 'FD prevalence', 
+               type = 'scatter', 
+               mode = 'lines',
+               yaxis = "y1") |>
+  add_trace(y = ~imp_ratio, 
+            name = 'Impacts', 
+            type = 'scatter', 
+            mode = 'lines',
+            yaxis = "y2") |>
+  layout(
+    title = "Flash droghts and news media impacts - Brandenburg", 
+    yaxis2 = list(overlaying = "y",
+                  side = "right",
+                  title = "Impact (per 10k articles)",
+                  position = 0.95,
+                  dtick = 0.03,
+                  range = c(0,0.15)
+    ),
+    xaxis = list(title="Date",
+                 domain = c(0, 0.95)),
+    yaxis = list(title="FD prevalence",
+                 dtick = 0.1,
+                 range = c(0, 0.5)
+    )
+  )
+
+
+# 9. Get NUTS-1 shape -----------------------------------------------------
+
+shape_nuts_2 <- sf::read_sf("./data/GIS/nuts2.shp")
+shape_nuts_1 <- sf::read_sf("./data/GIS/NUTS/NUTS_RG_20M_2021_4326.shp") |>
+  filter(LEVL_CODE == 1,
+         CNTR_CODE == "DE") |>
+  select(c("NUTS_ID", "LEVL_CODE", "NUTS_NAME", "geometry"))
+
+sf::write_sf(shape_nuts_1, "./data/GIS/nuts1.shp")
+
+
+saveRDS(shape_nuts_2, "test.RData")
+
+test <- readRDS("test.RData")
+
+min(test == shape_nuts_2)
+
+reticulate::py_save_object(shape_nuts_2, "test1", pickle = "pickle")
+test1 <- reticulate::py_load_object("test1", pickle = "pickle")
+test1
+
+class(shape_nuts_2)
