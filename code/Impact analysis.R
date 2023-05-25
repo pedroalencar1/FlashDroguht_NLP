@@ -20,6 +20,7 @@ library(plotly)
 library(sf)
 
 source("../../@R scripts/Utilities.R")
+source("code/functions.R")
 
 # impacts dataset
 impact_data <- data.table::fread("data/extracted_impacts_daily_12_12_2022.csv") |>
@@ -88,6 +89,8 @@ impact_sep_fd_lvl3 <- impact_fd |>
          ratio_rescale = scales::rescale(ratio)
   ) 
 
+saveRDS(impact_sep_fd_lvl3, "files/impact_by_class_lvl3.RData")
+
 # __Aggreatate into weeks and lvl2 ----------------------------------------
 
 impacts_fd_lvl2 <- impact_fd_lvl3 |>
@@ -97,8 +100,12 @@ impacts_fd_lvl2 <- impact_fd_lvl3 |>
   summarise_at(vars(n), sum) |>
   left_join(number_of_articles_wiso_db) |>
   mutate(ratio = n/articles,
-         ratio_rescale = scales::rescale(ratio)
+         ratio_rescale = scales::rescale(ratio),
+         test = paste(year,week, nuts_id, sep = "-")
   ) 
+
+
+
 
 impacts_sep_fd_lvl2 <- impact_sep_fd_lvl3 |>
   ungroup()|>
@@ -136,14 +143,6 @@ impacts_fd_lvl2 |>
 
 # 3. Get NUTS raster ------------------------------------------------------
 
-julian_to_date <- function(j_day, j_year){
-  
-  date <- as.Date(j_day-1,    # Convert Julian day to date
-                  origin = as.Date(paste(j_year, "-01-01", sep = "")))
-  
-  return(date)
-}
-
 # get shape of all nuts_2
 shape_nuts_2 <- shape_nuts|> 
   filter(LEVL_CODE == 2) |>
@@ -161,7 +160,7 @@ shape_impacts_2 <- full_join(x = shape_nuts_2,
 
 st_write(shape_impacts_2, "files/impact_nuts2_week_multi_impact.shp")
 
-
+tail(shape_impacts_2)
 # __Complete list of shapes by week ---------------------------------------
 
 all_shapes <- expand_grid(nuts_id = unique(shape_impacts_2$nuts_id),
@@ -175,6 +174,8 @@ all_impacts_2 <- full_join(x = shape_impacts_2,
                            y = all_shapes, 
                            by = c("nuts_id", "day"))
 
+View(all_impacts_2)
+
 
 # pb <- easy_progress_bar(total_it = nrow(all_impacts_2), width_bar = 100)
 # for (i in 1:nrow(all_impacts_2)){
@@ -187,7 +188,7 @@ all_impacts_2 <- all_impacts_2 |>
   ungroup()|>
   as.data.frame() |>
   select(-geometry) |>
-  left_join(shape_nuts_2, by = c("nuts_id" = "NUTS_ID")) |>
+  left_join(shape_nuts_2, by = c("nuts_id")) |>
   mutate(across(energy:ratio, ~ifelse(is.na(.x), 0, .x)))|>
   rename(imp_ratio = ratio) |>
   rename(date = day)
@@ -202,8 +203,8 @@ list_impacts_2 <- split(all_impacts_2, f = all_impacts_2$date)
 
 fd_brick <- terra::rast("files/germany_fd_pentad.nc") 
 fd_brick_impact <- fd_brick[[which(lubridate::year(time(fd_brick)) >= 2000)]]
-
-# fd_brick_impact[[1]] |> plot()
+# plot(fd_brick_impact[[1]])
+fd_brick_impact[[1]] |> plot()
 
 shape_fd <- terra::extract(fd_brick_impact, shape_nuts_2, 
                         fun = "mean", na.rm = T, 
@@ -313,6 +314,8 @@ impacts_sep_fd_lvl1 <- impact_sep_fd_lvl3 |>
   mutate(across(energy:livestock, ~ifelse(is.na(.x), 0, .x)),
          ratio = energy+social+agriculture+fire+livestock)
 
+tally_impact_by_class <- function(impact_by_class)
+
 # get shape of all nuts_1
 shape_nuts_1 <- shape_nuts|> 
   filter(LEVL_CODE == 1) |>
@@ -328,7 +331,7 @@ shape_impacts_1 <- full_join(x = shape_nuts_1,
          day = julian_to_date(jday, year)) |>
   select(-c(year, week, jday))
 
-sf::st_write(shape_impacts_2, "files/impact_nuts1_week_multi_impact.shp")
+sf::st_write(shape_impacts_1, "files/impact_nuts1_week_multi_impact.shp")
 
 # __Complete list of shapes by week ---------------------------------------
 
@@ -466,7 +469,6 @@ shape_nuts_1 <- sf::read_sf("./data/GIS/NUTS/NUTS_RG_20M_2021_4326.shp") |>
 
 sf::write_sf(shape_nuts_1, "./data/GIS/nuts1.shp")
 
-
 saveRDS(shape_nuts_2, "test.RData")
 
 test <- readRDS("test.RData")
@@ -478,3 +480,14 @@ test1 <- reticulate::py_load_object("test1", pickle = "pickle")
 test1
 
 class(shape_nuts_2)
+
+
+# __ Get NUTS-3 shape -----------------------------------------------------
+
+
+shape_nuts_3 <- sf::read_sf("./data/GIS/NUTS/NUTS_RG_20M_2021_4326.shp") |>
+  filter(LEVL_CODE == 3,
+         CNTR_CODE == "DE") |>
+  select(c("NUTS_ID", "LEVL_CODE", "NUTS_NAME", "geometry"))
+
+sf::write_sf(shape_nuts_3, "./data/GIS/nuts3.shp")

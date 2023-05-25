@@ -29,10 +29,12 @@ library(sf)
 
 # 1. load datasets --------------------------------------------------------
 
+shape_nuts_3 <- sf::read_sf("./data/GIS/nuts3.shp")
 shape_nuts_2 <- sf::read_sf("./data/GIS/nuts2.shp")
 shape_nuts_1 <- sf::read_sf("./data/GIS/nuts1.shp")
 shape_nuts_ <- shape_nuts_2
 
+factpal_3 <- colorFactor(hcl.colors(4, palette = "Dark 3"), shape_nuts_3$NUTS_ID)
 factpal_2 <- colorFactor(hcl.colors(4, palette = "Dark 3"), shape_nuts_2$NUTS_ID)
 factpal_1 <- colorFactor(hcl.colors(4, palette = "Dark 3"), shape_nuts_1$NUTS_ID)
 factpal_ <- shape_nuts_2
@@ -40,9 +42,14 @@ factpal_ <- shape_nuts_2
 pal_1 <- brewer.pal(n = 7, name = 'YlOrRd')[c(7,4,2)]
 pal_2 <- brewer.pal(n = 5, name = 'Set3')
 
-full_series_2 <- readRDS("./files/full_series_lvl2.RData")
-full_series_1 <- readRDS("./files/full_series_lvl1.RData") 
+# full_series_2 <- readRDS("./files/gleam_full_series_lvl2.RData")
+# full_series_1 <- readRDS("./files/gleam_full_series_lvl1.RData") 
 
+full_series_3 <- readRDS("./files/ufz_full_series_lvl3.RData")
+full_series_2 <- readRDS("./files/ufz_full_series_lvl2.RData")
+full_series_1 <- readRDS("./files/ufz_full_series_lvl1.RData") 
+
+regions_3 <- sort(unique(shape_nuts_3$NUTS_NAME))
 regions_2 <- sort(unique(shape_nuts_2$NUTS_NAME))
 regions_1 <- sort(unique(shape_nuts_1$NUTS_NAME))
 # 2. THE APP --------------------------------------------------------------
@@ -54,7 +61,7 @@ ui <- fluidPage(
   theme = bs_theme(version = 4, bootswatch = "materia"),
   
   title = "Flash drought perception in the media",
-
+  
   titlePanel(div(h3('Flash droughts perception in Germany', style="margin: 0;"), 
                  h4('A comparison between occurence and reporting in news media', 
                     style="margin: 0;"),br())),
@@ -68,21 +75,21 @@ ui <- fluidPage(
       radioButtons(
         "nuts_level_",
         "NUTS level",
-        choices = c(1,2),
+        choices = c(1,2,3),
         selected = 2
       ),
       selectInput(
         "region_",
         "Select region",
         choices = regions_2,
-        selected = "Brandenburg"
+        selected = "Berlin"
       ),
       sliderInput(
         "year_",
         "Choose year",
         min = 2000,
         max = 2021,
-        value = c(2003, 2006)
+        value = c(2003, 2007)
       ),
       h4("Plot option"),
       radioButtons("plot_", " ", 
@@ -95,23 +102,25 @@ ui <- fluidPage(
            leafletOutput("Map1")),
     column(7, offset = 0,
            plotlyOutput("graph1")),
+    # column(1, offset = 0,
+    #        textOutput("text1")),
   ),
   br(),
   br(),
   br(),
-
+  
   
   # notes ----
   
   wellPanel(fluidRow(column(12,
                             h4("About this app"),
-                            h5("Flash drought identificatio method: ", 
+                            h5("Flash drought identification method: ", 
                                tags$a(href="https://www.sciencedirect.com/science/article/abs/pii/S0168192317302885?via%3Dihub", 
-                                                                             "Ford and Labosier (2017)"),  
+                                      "Ford and Labosier (2017)"),  
                                tags$br(),
                                "Source of soil moisture data: ", 
-                               tags$a(href = "https://www.gleam.eu/",
-                                      "GLEAM v3.6"),
+                               tags$a(href = "https://www.ufz.de/index.php?en=37937",
+                                      "ufz.de"),
                                tags$br(),
                                "Impact assessment from news articles gently provided by ",
                                tags$a(href="https://www.ufz.de/index.php?en=46549", 
@@ -125,10 +134,10 @@ ui <- fluidPage(
                                tags$br(),
                                "Berlin, 01.03.2023"
                             )
-                            ),
-                     )
-            )
+  ),
   )
+  )
+)
 
 
 #__2.2 Server --------------------------------------------------------------
@@ -137,18 +146,27 @@ server <- function(input, output, session) {
   observe({ #update the list of regions
     nuts_lvl <- input$nuts_level_
     
+    name <- input$Map1_shape_click$id
+    text_name <- as.character(name)
+    
     if (nuts_lvl == 1){
       updateSelectInput(session, "region_",
                         choices = regions_1,
-                        selected = "Brandenburg")
+                        selected = text_name)
       shape_nuts_ <- shape_nuts_1 # to use on the map
       factpal_ <- factpal_1
-    } else {
+    } else if (nuts_lvl == 2){
       updateSelectInput(session, "region_",
                         choices = regions_2,
-                        selected = "Brandenburg")
+                        selected = text_name)
       shape_nuts_ <- shape_nuts_2# to use on the map
       factpal_ <- factpal_2
+    } else {
+      updateSelectInput(session, "region_",
+                        choices = regions_3,
+                        selected = text_name)
+      shape_nuts_ <- shape_nuts_3# to use on the map
+      factpal_ <- factpal_3
     }
   })
   
@@ -160,9 +178,12 @@ server <- function(input, output, session) {
     if (nuts_lvl == 1){
       shape_nuts_ <- shape_nuts_1 # to use on the map
       factpal_ <- factpal_1
-    } else {
+    } else if (nuts_lvl == 2){
       shape_nuts_ <- shape_nuts_2# to use on the map
       factpal_ <- factpal_2
+    } else {
+      shape_nuts_ <- shape_nuts_3# to use on the map
+      factpal_ <- factpal_3
     }
     
     region <- input$region_
@@ -192,6 +213,7 @@ server <- function(input, output, session) {
                     color = "white",
                     weight = 2,
                     opacity = 1,
+                    layerId = ~NUTS_NAME,
                     fillColor  =~factpal_(NUTS_ID),
                     fillOpacity = 0.5,
                     highlightOptions = highlightOptions(
@@ -208,9 +230,11 @@ server <- function(input, output, session) {
                                    padding = "3px 8px"),
                       textsize = "15px",
                       direction = "auto")
-                    )
+        )
       
     })
+    
+
     
   })
   
@@ -221,10 +245,13 @@ server <- function(input, output, session) {
     if (nuts_lvl == 1){
       shape_nuts_ <- shape_nuts_1 # to use on the map
       full_series <- full_series_1
-    } else {
+    } else if (nuts_lvl == 2){
       shape_nuts_ <- shape_nuts_2# to use on the map
       full_series <- full_series_2
-      }
+    } else {
+      shape_nuts_ <- shape_nuts_3# to use on the map
+      full_series <- full_series_3
+    }
     
     region <- input$region_
     range <- input$year_
@@ -232,7 +259,7 @@ server <- function(input, output, session) {
     # 
     # region = "Berlin"
     # range = c(2003, 2005)
-
+    
     if (region %in% shape_nuts_$NUTS_NAME){
       nuts_id_select <- shape_nuts_$NUTS_ID[which(shape_nuts_$NUTS_NAME == region)]
       
@@ -303,92 +330,93 @@ server <- function(input, output, session) {
             )
         })
       } else {
-      output$graph1 <- renderPlotly({
-        
-        plot_ly(plot_series, x = ~as.factor(date)) %>%
-          add_lines(
-            y = ~fd_ratio,
-            name = "FD prevalence",
-            yaxis = "y1",
-            line = list(color = pal_1[1])
-          )  %>%
-          add_lines(
-            y = ~imp_ratio,
-            name = "Perception",
-            yaxis = "y2",
-            line = list(color = "darkgrey",
-                        # alpha = 0.6,
-                        width = 0.2)
-          )  %>%
-          add_bars(y = ~agriculture*10000,
-                   name = "agriculture",
-                   width = 1,
-                   yaxis = "y2",
-                   marker = list(color = pal_2[1])) %>%
-          add_bars(y = ~energy*10000,
-                   name = "energy",
-                   width = 1,
-                   yaxis = "y2",
-                   marker = list(color = pal_2[2])) %>%
-          add_bars(y = ~social*10000,
-                   name = "social",
-                   width = 1,
-                   yaxis = "y2",
-                   marker = list(color = pal_2[3])) %>%
-          add_bars(y = ~fire*10000,
-                   name = "fire",
-                   width = 1,
-                   yaxis = "y2",
-                   marker = list(color = pal_2[4])) %>%
-          add_bars(y = ~livestock*10000,
-                   name = "livestock",
-                   width = 1,
-                   yaxis = "y2",
-                   marker = list(color = pal_2[5])) %>%
-          layout(
-            title = paste0("Flash drought prevalence and perception in ", region),
-            xaxis = list(
-              title = "Year",
-              domain = c(0, 0.95),
-              # type = "date",
-              tickmode = "auto",
-              nticks = 20,
-              dtick = "M1",
-              ticks = "outside"
-            ),
-            yaxis = list(
-              title = "Prevalence (-)",
-              side = "left",
-              color = "black",
-              position = 0,
-              anchor = "free",
-              rangemode="tozero",
-              scaleanchor='y', scaleratio=1, constraintoward='bottom', secondary_y=T,
-              range = c(0, max_fd),
-              nticks = 4
-              # dticks = 0.1
-            ),
-            yaxis2 = list(
-              title = "Perception (-)",
-              side = "right",
-              color = "black",
-              overlaying = "y",
-              anchor = "free",
-              position = 0.95,
-              rangemode="tozero",
-              scaleanchor='y2',scaleratio=1, constraintoward='bottom', secondary_y=F,
-              range = c(0, max_imp),
-              nticks = 4
-              # dticks = 0.01
-            ),
-            barmode = "stack",
-            showlegend = T
-          )
-      })
+        output$graph1 <- renderPlotly({
+          
+          plot_ly(plot_series, x = ~as.factor(date)) %>%
+            add_lines(
+              y = ~fd_ratio,
+              name = "FD prevalence",
+              yaxis = "y1",
+              line = list(color = pal_1[1])
+            )  %>%
+            add_lines(
+              y = ~imp_ratio,
+              name = "Perception",
+              yaxis = "y2",
+              line = list(color = "darkgrey",
+                          # alpha = 0.6,
+                          width = 0.2)
+            )  %>%
+            add_bars(y = ~agriculture*10000,
+                     name = "agriculture",
+                     width = 1,
+                     yaxis = "y2",
+                     marker = list(color = pal_2[1])) %>%
+            add_bars(y = ~energy*10000,
+                     name = "energy",
+                     width = 1,
+                     yaxis = "y2",
+                     marker = list(color = pal_2[2])) %>%
+            add_bars(y = ~social*10000,
+                     name = "social",
+                     width = 1,
+                     yaxis = "y2",
+                     marker = list(color = pal_2[3])) %>%
+            add_bars(y = ~fire*10000,
+                     name = "fire",
+                     width = 1,
+                     yaxis = "y2",
+                     marker = list(color = pal_2[4])) %>%
+            add_bars(y = ~livestock*10000,
+                     name = "livestock",
+                     width = 1,
+                     yaxis = "y2",
+                     marker = list(color = pal_2[5])) %>%
+            layout(
+              title = paste0("Flash drought prevalence and perception in ", region),
+              xaxis = list(
+                title = "Year",
+                domain = c(0, 0.95),
+                # type = "date",
+                tickmode = "auto",
+                nticks = 20,
+                dtick = "M1",
+                ticks = "outside"
+              ),
+              yaxis = list(
+                title = "Prevalence (-)",
+                side = "left",
+                color = "black",
+                position = 0,
+                anchor = "free",
+                rangemode="tozero",
+                scaleanchor='y', scaleratio=1, constraintoward='bottom', secondary_y=T,
+                range = c(0, max_fd),
+                nticks = 4
+                # dticks = 0.1
+              ),
+              yaxis2 = list(
+                title = "Perception (-)",
+                side = "right",
+                color = "black",
+                overlaying = "y",
+                anchor = "free",
+                position = 0.95,
+                rangemode="tozero",
+                scaleanchor='y2',scaleratio=1, constraintoward='bottom', secondary_y=F,
+                range = c(0, max_imp),
+                nticks = 4
+                # dticks = 0.01
+              ),
+              barmode = "stack",
+              showlegend = T
+            )
+        })
       }
     } else {
       plot_series <- NA # do nothing -> will by default go back to Brandenburg
     }
+    
     
     # # Button
     # output$downloadData <- downloadHandler(

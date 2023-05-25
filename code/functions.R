@@ -1,4 +1,12 @@
 
+julian_to_date <- function(j_day, j_year){
+  
+  date <- as.Date(j_day-1,    # Convert Julian day to date
+                  origin = as.Date(paste(j_year, "-01-01", sep = "")))
+  
+  return(date)
+}
+
 # function to get pentad number. Leap year agregated in February
 get_pentad <- function(time){
   julian <- lubridate::yday(time)
