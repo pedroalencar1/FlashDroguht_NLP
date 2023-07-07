@@ -97,3 +97,30 @@ raster_FL2017 <- function(swc, crit = c(40, 20, 30)){
   
   return(series.swc)
 }
+
+get_perc_swc <- function(swc, crit = c(40, 20, 30)){
+  
+  crit1 = crit[1]
+  crit2 = crit[2]
+  crit3 = crit[3]
+  
+  colnames(swc) <- c("time", "swc")
+  
+  #get series and matrix of soil moisture
+  series.swc <- swc
+  pentad.swc <- matrix(swc$swc, nrow = 73, byrow = F)
+  
+  #get series and matrix of percentiles
+  percentile.swc <- t(apply(pentad.swc, 1, fdClassify::f.percentile))
+  percentile.series <- c(percentile.swc)
+  
+  series.swc$perc_swc <- percentile.series
+ 
+  return(series.swc)
+  
+}
+
+
+
+
+

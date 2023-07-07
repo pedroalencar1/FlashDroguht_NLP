@@ -108,7 +108,10 @@ for (unit_id in units){
 saveRDS(df_perc, 
         file = "files/full_series_perc.RData")
 
+df_perc<- readRDS("files/full_series_perc.RData")
+
 # 1.1. Example plot -------------------------------------------------------
+
 
 
 all_lags <- expand_grid(unit = units,
@@ -149,12 +152,12 @@ for (i in 1:(22*38)){
                 ifelse(length(.) == 0, 0, .)
   )
   
-  if(inherits(val, "try-error")){
-    next
-  } else {
+  # if(inherits(val, "try-error")){
+  #   next
+  # } else {
     all_lags$lag[i] <- (val1)
     all_lags$ccf[i] <- (val2)
-  }
+  # }
 }
 # View(all_lags)
 
@@ -223,63 +226,3 @@ ggsave("figs/delay_germany.png", width = 20, height = 12, units = "cm")
   theme_bw()
 
 
-  
-all_lags |>
-  filter(lag > 0) |>
-  mutate(lag = lag - lag_max) |>
-  filter(lag %in% 3:4) |>
-  drop_na() |>
-  ggplot(aes(x = ccf))+
-  geom_histogram(aes(y = after_stat(density))) +
-  geom_density(adjust = 0.75)+
-  scale_x_continuous(expand = c(0,0), limits = c(0,1))+
-  theme_bw()
-  
-
-
-  
-  
-
-max_diff <- df_perc |>
-  group_by(year, nuts_id) |>
-  summarise_at(vars(fd_diff_1_perc), max) |>
-  rename(c(unit = "nuts_id"))
-
-all_lags |>
-  mutate(lag = lag - 11) |>
-  left_join(max_diff, by = c("year", "unit")) |> View()
-
-
-# use rolling kernel instead of yearly
-
-
-test <- df_perc_increase
-test[test == 0] <- NA
-
-test1 <- filter(test, nuts_id == "DE40",
-                year == 2018) |>
-   mutate(imp_perc = ifelse(imp_perc > 80, 1, 0),
-          fd_diff_1_perc = ifelse(fd_diff_1_perc > 80, 1, 0))
-test2 <- filter(df_perc_increase, nuts_id == "DE40", 
-                year == 2018)|>
-  mutate(imp_perc = ifelse(imp_perc > 80, 1, 0),
-         fd_diff_1_perc = ifelse(fd_diff_1_perc > 80, 1, 0))
-
-ccf(x = test1$imp_perc, 
-    y = test1$fd_diff_1_perc,
-    lag.max = 10,
-    na.action = na.pass
-    # na.action = na.contiguous
-    )
-
-ccf(x = test2$imp_perc,
-    y = test2$fd_diff_1_perc,
-    lag.max = 10)
-
-
-ggplot(test2)+
-  geom_path(aes(x = week, y = imp_perc))+
-  geom_path(aes(x = week, y = fd_diff_1_perc), color = "red")
-
-TSA::prewhiten(x = test2$imp_perc, 
-               y = test2$fd_diff_1)
