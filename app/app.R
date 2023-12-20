@@ -341,34 +341,34 @@ server <- function(input, output, session) {
             )  %>%
             add_lines(
               y = ~imp_ratio,
-              name = "Perception",
+              name = " ",
               yaxis = "y2",
               line = list(color = "darkgrey",
                           # alpha = 0.6,
                           width = 0.2)
             )  %>%
             add_bars(y = ~agriculture*10000,
-                     name = "agriculture",
+                     name = "Agriculture",
                      width = 1,
                      yaxis = "y2",
                      marker = list(color = pal_2[1])) %>%
             add_bars(y = ~energy*10000,
-                     name = "energy",
+                     name = "Energy",
                      width = 1,
                      yaxis = "y2",
                      marker = list(color = pal_2[2])) %>%
             add_bars(y = ~social*10000,
-                     name = "social",
+                     name = "Social",
                      width = 1,
                      yaxis = "y2",
                      marker = list(color = pal_2[3])) %>%
             add_bars(y = ~fire*10000,
-                     name = "fire",
+                     name = "Fire",
                      width = 1,
                      yaxis = "y2",
                      marker = list(color = pal_2[4])) %>%
             add_bars(y = ~livestock*10000,
-                     name = "livestock",
+                     name = "Livestock",
                      width = 1,
                      yaxis = "y2",
                      marker = list(color = pal_2[5])) %>%

@@ -226,3 +226,27 @@ ggsave("figs/delay_germany.png", width = 20, height = 12, units = "cm")
   theme_bw()
 
 
+# __check correlations ----------------------------------------------------
+
+  # df_perc
+cor(df_perc$fd_diff_3_perc, df_perc$imp_perc)
+
+test <- df_perc 
+  # filter(fd_diff_1_perc >= 60)
+test$imp_perc <- c(df_perc$imp_perc[5:nrow(df_perc)], rep(0, 4))
+
+test <- test |>
+  ungroup()|>
+  group_by(year, nuts_id)
+
+test_sort <- test[order(test$year,test$nuts_id, -test$fd_diff_1_perc),]
+test_select <- test_sort[!duplicated(test$nuts_id),]
+
+length(unique(df_perc$year))
+
+
+cor(test_select$fd_diff_2_perc, test_select$imp_perc)
+
+data.table::setDT(test)[, .SD[which.max(fd_diff_1_perc)], by=c(year)]
+
+

@@ -25,10 +25,18 @@ source("code/functions.R")
 # impacts dataset
 impact_data <- data.table::fread("data/extracted_impacts_daily_12_12_2022.csv") |>
   select(-V1) |>
-  mutate(date = as.Date(date, tryFormats = c("%d.%m.%Y")))
+  mutate(date = as.Date(date, tryFormats = c("%d.%m.%Y"))) |>
+  select(-nuts_name)
+
+impact_data_2022 <- data.table::fread("data/impacts_daily_2022/pedro_export_2022_b.csv") |>
+  select(-V1) |>
+  mutate(date = as.Date(date, tryFormats = c("%d.%m.%Y"))) |>
+  select(nuts_id, date, type_of_class, id)
+  
+impact_data <- rbind(impact_data, impact_data_2022)
 
 # total publications per year
-number_of_articles_wiso_db <- data.frame(year = seq(2000,2021,1),
+number_of_articles_wiso_db <- data.frame(year = seq(2000,2022,1),
                                          articles = c(3727202, 3805202, 4046952, 
                                                       5279895, 6539592, 7031086, 
                                                       7546534, 7769275, 8381606, 
@@ -36,7 +44,8 @@ number_of_articles_wiso_db <- data.frame(year = seq(2000,2021,1),
                                                       9447050, 9178527, 9121899, 
                                                       9098091, 10399161, 12321421, 
                                                       13537762, 13428658, 11360680, 
-                                                      11693705))
+                                                      11693705, 13937646))
+
 
 impact_data |>
   mutate(year = lubridate::year(date))|>
@@ -133,7 +142,7 @@ shape_nuts <- sf::read_sf(shape_nuts_path) |>
 
 impacts_fd_lvl2 |>
   filter(nuts_id == "DE40") |>
-  filter(year %in% 2017:2021)|>
+  filter(year %in% 2017:2022)|>
   ggplot(aes(x = week, y = ratio, color = factor(year)))+
   geom_path()+
   theme_bw()
@@ -164,7 +173,7 @@ tail(shape_impacts_2)
 # __Complete list of shapes by week ---------------------------------------
 
 all_shapes <- expand_grid(nuts_id = unique(shape_impacts_2$nuts_id),
-                          year = 2000:2021,
+                          year = 2000:2022,
                           week = 1:52) |>
   mutate(jday = 1+7*(week-1), 
          day = julian_to_date(jday, year)) |>
@@ -174,7 +183,7 @@ all_impacts_2 <- full_join(x = shape_impacts_2,
                            y = all_shapes, 
                            by = c("nuts_id", "day"))
 
-View(all_impacts_2)
+# View(all_impacts_2)
 
 
 # pb <- easy_progress_bar(total_it = nrow(all_impacts_2), width_bar = 100)

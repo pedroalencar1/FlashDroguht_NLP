@@ -139,6 +139,8 @@ terra::writeCDF(ufz_fd_pentad,
 
 terra::plot(ufz_fd_pentad[[3100]])
 
+ufz_fd_pentad <- rast("files/ufz_fd_pentad.nc")
+
 
 # 4. Get prevalence at each level -----------------------------------------
 
@@ -159,7 +161,7 @@ shape_nuts_3 <- shape_nuts |>
   
 # select dates and set raster projection
 ufz_fd_impact <- ufz_fd_pentad[[which(lubridate::year(time(ufz_fd_pentad)) >= 2000 & 
-                                        lubridate::year(time(ufz_fd_pentad)) <= 2021)]]
+                                        lubridate::year(time(ufz_fd_pentad)) <= 2022)]]
 
 crs(ufz_fd_impact) <- crs(shape_nuts)
 
@@ -206,7 +208,7 @@ fd_prev_3 <- get_prevalence_fd(ufz_fd_impact, shape_nuts_3, 3)
 # 5. Get full_series df ---------------------------------------------------
 
 # all articles published yearly
-number_of_articles_wiso_db <- data.frame(year = seq(2000,2021,1),
+number_of_articles_wiso_db <- data.frame(year = seq(2000,2022,1),
                                          articles = c(3727202, 3805202, 4046952, 
                                                       5279895, 6539592, 7031086, 
                                                       7546534, 7769275, 8381606, 
@@ -214,7 +216,7 @@ number_of_articles_wiso_db <- data.frame(year = seq(2000,2021,1),
                                                       9447050, 9178527, 9121899, 
                                                       9098091, 10399161, 12321421, 
                                                       13537762, 13428658, 11360680, 
-                                                      11693705))
+                                                      11693705, 13937646))
 
 impact_fd <-  data.table::fread("data/extracted_impacts_daily_12_12_2022.csv") |>
   select(-V1) |>
@@ -223,8 +225,26 @@ impact_fd <-  data.table::fread("data/extracted_impacts_daily_12_12_2022.csv") |
                               "agriculture", 
                               "livestock", 
                               "energy", 
-                              "social")
-         ) 
+                              "social")) 
+
+nuts_names <- impact_fd |>
+  select(nuts_id, nuts_name) |>
+  distinct()
+
+impact_data_2022 <- data.table::fread("data/impacts_daily_2022/pedro_export_2022_b.csv") |>
+  select(-V1) |>
+  mutate(date = as.Date(date, tryFormats = c("%d.%m.%Y"))) |>
+  select(nuts_id, date, type_of_class, id)  |>
+  filter(type_of_class %in% c("fire", 
+                              "agriculture", 
+                              "livestock", 
+                              "energy", 
+                              "social")) |>
+  left_join(nuts_names, by = "nuts_id") |>
+  select(nuts_id, nuts_name, date, type_of_class, id)
+
+impact_fd <- rbind(impact_fd, impact_data_2022)
+
 
 # function to export full series of fd_ratio and impacts
 
@@ -281,7 +301,7 @@ export_full_series <- function(impact_fd, fd_prev_lvl, lvl){
   
   # get complete series
   all_shapes <- expand_grid(NUTS_ID = unique(shape_impact_nuts_lvl$NUTS_ID),
-                            year = 2000:2021,
+                            year = 2000:2022,
                             week = 1:52) |>
     mutate(jday = 1+7*(week-1), 
            day = julian_to_date(jday, year)) |>
@@ -303,7 +323,7 @@ export_full_series <- function(impact_fd, fd_prev_lvl, lvl){
   
   full_series_lvl <- expand_grid(nuts_id = unique(fd_shape_lvl$nuts_id), 
                              date = seq.Date(as.Date("2000-01-01"),
-                                             as.Date("2021-12-31"),
+                                             as.Date("2022-12-31"),
                                              by = "day")) |>
     left_join(fd_shape_lvl, by = c("nuts_id", "date")) |>
     left_join(all_impacts_lvl, by = c("nuts_id", "date")) |>
@@ -311,6 +331,12 @@ export_full_series <- function(impact_fd, fd_prev_lvl, lvl){
     tidyr::fill(fd_ratio:imp_ratio, .direction = "down") |>
     mutate(imp_ratio = imp_ratio*1e4) #impact per 10k articles
   
+
+  # full_series_lvl |>
+  #   filter(nuts_id == "DE3") |>
+  #   View()
+
+
   saveRDS(full_series_lvl, 
           file = paste0("files/ufz_full_series_lvl", lvl,".RData")
           )
