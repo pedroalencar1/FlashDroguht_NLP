@@ -21,6 +21,8 @@ library(sf)
 library(progress)
 library(magrittr)
 
+library(ggplot2)
+
 source("./code/functions.R")
 source("../../@R scripts/Utilities.R")
 
@@ -141,7 +143,6 @@ terra::plot(ufz_fd_pentad[[3100]])
 
 ufz_fd_pentad <- rast("files/ufz_fd_pentad.nc")
 
-
 # 4. Get prevalence at each level -----------------------------------------
 
 # get shape into same projection of raster
@@ -160,24 +161,36 @@ shape_nuts_3 <- shape_nuts |>
   filter(LEVL_CODE == 3) 
   
 # select dates and set raster projection
-ufz_fd_impact <- ufz_fd_pentad[[which(lubridate::year(time(ufz_fd_pentad)) >= 2000 & 
-                                        lubridate::year(time(ufz_fd_pentad)) <= 2022)]]
 
+ufz_fd_pentad_a <- flip(ufz_fd_pentad[[1:1000]])
+ufz_fd_pentad_b <- flip(ufz_fd_pentad[[1001:2000]])
+ufz_fd_pentad_c <- flip(ufz_fd_pentad[[2001:3139]])
+
+ufz_fd_pentad_all <- c(ufz_fd_pentad_a, ufz_fd_pentad_b, ufz_fd_pentad_c)
+ufz_fd_impact <- ufz_fd_pentad_all[[which(lubridate::year(time(ufz_fd_pentad_all)) >= 1980 & 
+                                        lubridate::year(time(ufz_fd_pentad_all)) <= 2022)]]
+# ufz_fd_impact <- terra::flip(ufz_fd_impact)
 crs(ufz_fd_impact) <- crs(shape_nuts)
 
 
-plot(ufz_fd_impact[[1]], 
+plot(ufz_fd_impact[[10]], 
      fun=function(){plot(vect(shape_nuts_1), add=TRUE)} 
      )
 
 # function to export data of FD prevalence as dataframe
 get_prevalence_fd <- function(spat_raster, shape_nuts, level){
-  
+  # 
+  # spat_raster = ufz_fd_impact
+  # shape_nuts = shape_nuts_1
+  # level = 1
+  # 
   shape_fd <- terra::extract(spat_raster, shape_nuts, 
                                fun = "mean", na.rm = T, 
-                               exact = T)|>
+                               exact = T) |>
     mutate(nuts_id = shape_nuts$NUTS_ID) |>
     select(-ID)
+  
+  # View(shape_fd)
   
   number_cols = ncol(shape_fd) - 1
   
@@ -254,12 +267,12 @@ impact_fd = impact_fd
 shape_nuts_lvl = shape_nuts_2
 
 export_full_series <- function(impact_fd, fd_prev_lvl, lvl){
-  # 
+  # # 
   # lvl = 1
   # fd_prev_lvl = fd_prev_1
   # impact_fd = impact_fd
   # shape_nuts_lvl = shape_nuts_1
-  
+
   shape_nuts_lvl <- read_sf("data/GIS/NUTS/NUTS_RG_20M_2021_4326.shp") |>
     filter(CNTR_CODE == "DE", 
            LEVL_CODE == lvl) |>
@@ -350,6 +363,10 @@ export_full_series(impact_fd,
                    # shape_nuts_lvl = shape_nuts_1,
                    lvl = 1)
 
+readRDS('files/ufz_full_series_lvl1.RData') |>
+  filter(nuts_id == "DE3") |>
+  View()
+
 export_full_series(impact_fd, 
                    fd_prev_lvl = fd_prev_2,
                    # shape_nuts_lvl = shape_nuts_2,
@@ -360,5 +377,54 @@ export_full_series(impact_fd,
                    # shape_nuts_lvl = shape_nuts_3,
                    lvl = 3)
 
-test <- readRDS("files/ufz_full_series_lvl3.RData") 
-View(test)
+
+
+# 6. time series of fd occurence ------------------------------------------
+
+shape_nuts <- read_sf("data/GIS/NUTS/NUTS_RG_20M_2021_4326.shp") |>
+  filter(CNTR_CODE == "DE")|>
+  st_transform(crs = 31468) |>
+  filter(LEVL_CODE == 1) %>%
+  mutate(area = terra::expanse(terra::vect(.))) |>
+  mutate(area = area/1000000) |>
+  ungroup() |>
+  as.data.frame() |>
+  select(NUTS_ID, area)
+
+area_de <- sum(shape_nuts$area) #km2
+
+fd <- readRDS("files/ufz_fd_series_by_nuts_1.RData") |>
+  left_join(shape_nuts, by = join_by(nuts_id == NUTS_ID)) |>
+  mutate(area_fd = fd_ratio*area) |>
+  group_by(date) |>
+  summarise_at(vars(area_fd), sum, na.rm = T) |>
+  mutate(ratio_fd = area_fd/area_de) |>
+  mutate(year = lubridate::year(date)) |>
+  group_by(year) |>
+  summarise_at(vars(ratio_fd), max)
+
+mk_test <- rkt::rkt(fd$year, fd$ratio_fd)
+
+lb1 <- "paste(italic(Slope), \" = 9.11 %.\", decade ^ -1)"
+lb2 <- "paste(italic(p-value), \" = 0.001\")"
+
+ggplot(fd, aes(x = year, y = ratio_fd*100))+
+  geom_path(color = "#666666", size = 1)+
+  geom_smooth(method = "lm", color = "transparent")+
+  geom_abline(intercept = -1705,
+              slope = mk_test$B*100,
+              linetype = "dashed")+
+  scale_x_continuous("Year", expand = c(0,0))+
+  scale_y_continuous("Max. area affected by flash drought (%)",
+                     limits = c(0,100),
+                     breaks = seq(0,100,20),
+                     expand = c(0,0))+
+  annotate("text", x = 2011.7, y = 23, label = lb1, parse=TRUE)+
+  annotate("text", x = 2009.5, y = 16, label = lb2, parse=TRUE)+
+  theme_bw()
+
+
+ggsave("figs/trend_area_fd.png",
+       units = "cm",
+       width = 14, height = 8)
+   

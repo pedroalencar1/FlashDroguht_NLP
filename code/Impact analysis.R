@@ -99,7 +99,6 @@ impact_sep_fd_lvl3 <- impact_fd |>
   ) 
 
 saveRDS(impact_sep_fd_lvl3, "files/impact_by_class_lvl3.RData")
-
 # __Aggreatate into weeks and lvl2 ----------------------------------------
 
 impacts_fd_lvl2 <- impact_fd_lvl3 |>

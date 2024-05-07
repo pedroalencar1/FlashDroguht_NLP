@@ -42,13 +42,31 @@ factpal_ <- shape_nuts_2
 pal_1 <- brewer.pal(n = 7, name = 'YlOrRd')[c(7,4,2)]
 pal_2 <- brewer.pal(n = 5, name = 'Set3')
 
+#impact data
 # full_series_2 <- readRDS("./files/gleam_full_series_lvl2.RData")
 # full_series_1 <- readRDS("./files/gleam_full_series_lvl1.RData") 
 
 full_series_3 <- readRDS("./files/ufz_full_series_lvl3.RData")
 full_series_2 <- readRDS("./files/ufz_full_series_lvl2.RData")
-full_series_1 <- readRDS("./files/ufz_full_series_lvl1.RData") 
+full_series_1 <- readRDS("./files/ufz_full_series_lvl1.RData")
 
+full_series_gt <- readRDS("./files/gt_full_series_lvl1_2022.RData") 
+
+
+# trend data
+lag_1 <- readRDS("./files/plotdata_NUTS-1_lag_ufz.RData") 
+lag_2 <- readRDS("./files/plotdata_NUTS-2_lag_ufz.RData") 
+lag_3 <- readRDS("./files/plotdata_NUTS-3_lag_ufz.RData") 
+
+diff_1 <- readRDS("./files/plotdata_NUTS-1_diff_ufz.RData") 
+diff_2 <- readRDS("./files/plotdata_NUTS-2_diff_ufz.RData") 
+diff_3 <- readRDS("./files/plotdata_NUTS-3_diff_ufz.RData") 
+
+int_1 <- readRDS("./files/plotdata_NUTS-1_intensity_ufz.RData") 
+int_2 <- readRDS("./files/plotdata_NUTS-2_intensity_ufz.RData") 
+int_3 <- readRDS("./files/plotdata_NUTS-3_intensity_ufz.RData") 
+
+# areas
 regions_3 <- sort(unique(shape_nuts_3$NUTS_NAME))
 regions_2 <- sort(unique(shape_nuts_2$NUTS_NAME))
 regions_1 <- sort(unique(shape_nuts_1$NUTS_NAME))
@@ -66,82 +84,178 @@ ui <- fluidPage(
                  h4('A comparison between occurence and reporting in news media', 
                     style="margin: 0;"),br())),
   
-  # inputs and simple map ----
-  fluidRow(
-    column(
-      2,
-      h4("Select data"),
-      # add menus for selections ----
-      radioButtons(
-        "nuts_level_",
-        "NUTS level",
-        choices = c(1,2,3),
-        selected = 2
-      ),
-      selectInput(
-        "region_",
-        "Select region",
-        choices = regions_2,
-        selected = "Berlin"
-      ),
-      sliderInput(
-        "year_",
-        "Choose year",
-        min = 2000,
-        max = 2021,
-        value = c(2003, 2007)
-      ),
-      h4("Plot option"),
-      radioButtons("plot_", " ", 
-                   choices = list("Perception summary" = 1, 
-                                  "Perception discretisation" = 2),
-                   selected = 1),
+  tabsetPanel(
+    tabPanel("Perception analysis",
+             # inputs and simple map ----
+             fluidRow(
+               column(
+                 2,
+                 h4("Select data"),
+                 # add menus for selections ----
+                 radioButtons(
+                   "database_",
+                   "Data base",
+                   choices = c("News articles", "Google trends"),
+                   selected = "News articles"
+                 ),
+                 # h4("Select data"),
+                 # add menus for selections ----
+                 radioButtons(
+                   "nuts_level_",
+                   "NUTS level",
+                   choices = c(1, 2, 3),
+                   selected = 1
+                 ),
+                 selectInput("region_",
+                             "Region",
+                             choices = regions_1,
+                             selected = "Berlin"),
+                 sliderInput(
+                   "year_",
+                   "Years",
+                   min = 2000,
+                   max = 2022,
+                   value = c(2019, 2022)
+                 ),
+                 h4("Plot option"),
+                 radioButtons(
+                   "plot_",
+                   " ",
+                   choices = list(
+                     "Perception summary" = 1,
+                     "Perception discretisation" = 2
+                   ),
+                   selected = 1
+                 ),
+               ),
+               # show map with states and production values ----
+               column(3, offset = 0, #
+                      leafletOutput("Map1"),
+                      br(),
+                      br(),
+                      br(),
+                      downloadButton("downloadData", "Download Data"),
+               ),
+               column(7, offset = 0,
+                      plotlyOutput("graph1")),
+             ),
+          ),
+    
+    # tabPanel("Trend analysis",
+    # 
+    #          # inputs and simple map ----
+    #          fluidRow(
+    #            column(
+    #              2,
+    #              h4("Select data"),
+    #              # add menus for selections ----
+    #              radioButtons(
+    #                "nuts_level_2",
+    #                "NUTS level",
+    #                choices = c(1, 2, 3),
+    #                selected = 1
+    #              ),
+    #              selectInput("region_2",
+    #                          "Region",
+    #                          choices = regions_1,
+    #                          selected = "Berlin"),
+    #            ),
+    #            # show map with states and production values ----
+    #            column(3, offset = 0, #
+    #                   leafletOutput("Map1")),
+    #            column(7, offset = 0,
+    #                   plotlyOutput("graph2")),
+    #          ),
+    # ),
+), 
+
+hr(),
+
+fluidRow(
+  column(
+    12,
+    h4("Flash drought characteristics"),
+    actionButton("generate_btn", "Generate Plots"),  # Button to generate plot
+    br(),
+    br(),
+    offset = 0,
+    plotlyOutput("graph2", height = "250px"),
+    plotlyOutput("graph3", height = "250px"),
+    plotlyOutput("graph4", height = "250px"),
     ),
-    # show map with states and production values ----
-    column(3, offset = 0, #
-           leafletOutput("Map1")),
-    column(7, offset = 0,
-           plotlyOutput("graph1")),
-    # column(1, offset = 0,
-    #        textOutput("text1")),
+
   ),
-  br(),
-  br(),
-  br(),
-  
-  
+
   # notes ----
-  
-  wellPanel(fluidRow(column(12,
-                            h4("About this app"),
-                            h5("Flash drought identification method: ", 
-                               tags$a(href="https://www.sciencedirect.com/science/article/abs/pii/S0168192317302885?via%3Dihub", 
-                                      "Ford and Labosier (2017)"),  
-                               tags$br(),
-                               "Source of soil moisture data: ", 
-                               tags$a(href = "https://www.ufz.de/index.php?en=37937",
-                                      "ufz.de"),
-                               tags$br(),
-                               "Impact assessment from news articles gently provided by ",
-                               tags$a(href="https://www.ufz.de/index.php?en=46549", 
-                                      "Dr. Mariana M. de Brito"),
-                               " and ", 
-                               tags$a(href="https://jsodoge.eu/", 
-                                      "MSc. Jan Sodoge"),
-                               tags$br(),
-                               "Author:", tags$a(href="https://www.tu.berlin/oekohydro/team/pedro-alencar/", "Pedro Alencar"),
-                               tags$a(href="https://orcid.org/0000-0001-6221-8580", "(0000-0001-6221-8580)"),
-                               tags$br(),
-                               "Berlin, 25.05.2023"
-                            )
-  ),
-  )
-  )
+  br(),
+  br(),
+  wellPanel(fluidRow(column(
+    12,
+    h4("About this app"),
+    h5(
+      "Flash drought identification method: ",
+      tags$a(href = "https://www.sciencedirect.com/science/article/abs/pii/S0168192317302885?via%3Dihub",
+             "Ford and Labosier (2017)"),
+      tags$br(),
+      "Source of soil moisture data: ",
+      tags$a(href = "https://www.ufz.de/index.php?en=37937",
+             "ufz.de"),
+      tags$br(),
+      "Impact assessment from news articles gently provided by ",
+      tags$a(href = "https://www.ufz.de/index.php?en=46549",
+             "Dr. Mariana M. de Brito"),
+      " and ",
+      tags$a(href = "https://jsodoge.eu/",
+             "MSc. Jan Sodoge"),
+      tags$br(),
+      "Author:",
+      tags$a(href = "https://www.tu.berlin/oekohydro/team/pedro-alencar/", "Pedro Alencar"),
+      tags$a(href = "https://orcid.org/0000-0001-6221-8580", "(0000-0001-6221-8580)"),
+      tags$br(),
+      "Berlin, 25.05.2023"
+    )
+  )))
 )
 
 
 #__2.2 Server --------------------------------------------------------------
 server <- function(input, output, session) {
+  
+
+# update menu options -----------------------------------------------------
+  observe({#update the list of levels
+    
+    database <- input$database_
+    
+    if (database == "News articles"){
+      updateRadioButtons(session, "nuts_level_",
+                         choices = c(1,2,3),
+                         selected = 1)
+      
+      updateRadioButtons(session, "plot_",
+                         choices = list("Perception summary" = 1, 
+                                        "Perception discretisation" = 2),
+                         selected = 1)
+      
+      updateSliderInput(session, "year_",
+                        min = 2000,
+                        max = 2022,
+                        value = c(2019, 2022))
+    } else {
+      updateRadioButtons(session, "nuts_level_",
+                         choices = c(1),
+                         selected = 1)
+      
+      updateRadioButtons(session, "plot_",
+                         choices = list("Perception summary" = 1),
+                         selected = 1)
+      
+      updateSliderInput(session, "year_",
+                        min = 2004,
+                        max = 2022,
+                        value = c(2019, 2022))
+    }
+  })
   
   observe({ #update the list of regions
     nuts_lvl <- input$nuts_level_
@@ -170,8 +284,12 @@ server <- function(input, output, session) {
     }
   })
   
+
+# map design --------------------------------------------------------------
+
+  
   # grabs input and creates map
-  observe(label = "map_desing",{
+  observe(label = "map_design",{
     
     nuts_lvl <- input$nuts_level_
     
@@ -238,19 +356,34 @@ server <- function(input, output, session) {
     
   })
   
+
+# plot design -------------------------------------------------------------
+
   observe(label = "plot", {
     
+    database <- input$database_
     nuts_lvl <- input$nuts_level_
     
-    if (nuts_lvl == 1){
+    if (database == "Google trends") {
       shape_nuts_ <- shape_nuts_1 # to use on the map
-      full_series <- full_series_1
-    } else if (nuts_lvl == 2){
-      shape_nuts_ <- shape_nuts_2# to use on the map
-      full_series <- full_series_2
+      full_series <- full_series_gt
     } else {
-      shape_nuts_ <- shape_nuts_3# to use on the map
-      full_series <- full_series_3
+      
+      if (nuts_lvl == 1){
+        shape_nuts_ <- shape_nuts_1 # to use on the map
+        full_series <- full_series_1
+        
+
+      } else if (nuts_lvl == 2){
+        shape_nuts_ <- shape_nuts_2# to use on the map
+        full_series <- full_series_2
+        
+
+      } else {
+        shape_nuts_ <- shape_nuts_3# to use on the map
+        full_series <- full_series_3
+        
+      }
     }
     
     region <- input$region_
@@ -341,6 +474,7 @@ server <- function(input, output, session) {
             )  %>%
             add_lines(
               y = ~imp_ratio,
+              showlegend = FALSE,
               name = " ",
               yaxis = "y2",
               line = list(color = "darkgrey",
@@ -418,19 +552,94 @@ server <- function(input, output, session) {
     }
     
     
-    # # Button
-    # output$downloadData <- downloadHandler(
-    #   filename = function() {
-    #     paste(landkreis,crop,variety, '.csv', sep = "_")
-    #   },
-    #   content = function(file) {
-    #     write.csv(prod_series, file)
-    #   }
-    # )
+    # Button
+    output$downloadData <- downloadHandler(
+      filename = function() {
+        paste(region,min(range),max(range), '.csv', sep = "_")
+      },
+      content = function(file) {
+        write.csv(plot_series, file)
+      }
+    )
     
   })
   
+
+# trend design ----------------------------------------------------------
+  
+  
+  observeEvent(input$generate_btn, {
+    
+    nuts_lvl <- input$nuts_level_
+    
+    if (nuts_lvl == 1) {
+      p_lag <- lag_1
+      p_diff <- diff_1
+      p_int <- int_1
+    } else if (nuts_lvl == 2) {
+      p_lag <- lag_2
+      p_diff <- diff_2
+      p_int <- int_2
+    } else {
+      p_lag <- lag_3
+      p_diff <- diff_3
+      p_int <- int_3
+    }
+    
+  output$graph2 <- renderPlotly({
+
+    
+    plot_ly(p_lag, x = ~year, y = ~fd, color = ~NUTS_NAME,
+            type = 'scatter', mode = 'lines', hoverinfo = 'text',
+            line = list(opacity = ifelse(nuts_lvl == 3, 0.3, 0.7)),
+            # line = list(opacity = 0.1),
+            colors = viridis::viridis(length(unique(p_lag$NUTS_NAME))),
+            text = ~paste("<br>Location:", NUTS_NAME, "<br>Year:", year, "<br>Onset duration:", fd)) %>%
+      layout(title = "Onset duration time series",
+             xaxis = list(title = "Year"),
+             yaxis = list(title = "Onset duration in pentads"),
+             showlegend = ifelse(nuts_lvl == 3, F, T))
+  })
+  
+  
+  output$graph3 <- renderPlotly({
+    
+    plot_ly(p_diff, x = ~year, y = ~fd, color = ~NUTS_NAME,
+            type = 'scatter', mode = 'lines', hoverinfo = 'text',
+            line = list(opacity = ifelse(nuts_lvl == 3, 0.3, 0.7)),
+            # line = list(opacity = 0.1),
+            colors = viridis::viridis(length(unique(p_lag$NUTS_NAME))),
+            text = ~paste("<br>Location:", NUTS_NAME, "<br>Year:", year, "<br>SM-drop:", fd)) %>%
+      layout(title = "Drop of soil moisture over onset phase time series",
+             xaxis = list(title = "Year"),
+             yaxis = list(title = "SM-drop in percentiles"),
+             showlegend = ifelse(nuts_lvl == 3, F, T))
+  })
+  
+  output$graph4 <- renderPlotly({
+    
+    plot_ly(p_int, x = ~year, y = ~fd, color = ~NUTS_NAME,
+            type = 'scatter', mode = 'lines', hoverinfo = 'text',
+            line = list(opacity = ifelse(nuts_lvl == 3, 0.3, 0.7)),
+            # line = list(opacity = 0.1),
+            colors = viridis::viridis(length(unique(p_lag$NUTS_NAME))),
+            text = ~paste("<br>Location:", NUTS_NAME, "<br>Year:", year, "<br>Intensity:", fd)) %>%
+      layout(title = "FD intensity - ratio between SM-drop and onset duratio",
+             xaxis = list(title = "Year"),
+             yaxis = list(title = "Intensity (percentiles/pentad)"),
+             showlegend = ifelse(nuts_lvl == 3, F, T))
+  })
+  
+  })
+  
+  
 }
+
+
+
+
 
 #__2.3 Build app ------------------------------------------------------------------
 shinyApp(ui, server)
+
+

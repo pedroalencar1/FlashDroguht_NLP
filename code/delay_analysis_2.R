@@ -131,12 +131,21 @@ all_lags_list <- list(all_lags_lvl1,
 
 saveRDS(all_lags_list, file = "files/all_lags_15.RData")
 
+select_lag <- all_lags_list[[3]] |>
+  filter(lag > 15 & lag <= 22) 
+
+sqrt(mean(select_lag$ccf, na.rm =T))
+
 
 # 3. plot delays ----------------------------------------------------------
 
 #' function to plot kernel distribution and histogram of delays
 plot_delay <- function(all_lags, lag_max = 15, nuts = 1){
   
+  all_lags_list[[1]]
+  nuts =1
+  lag_max = 15
+  # 
   colors <- c("Histogram" = "#999999", 
               "Empiric PDF" = "#000000", 
               "Baseline" = "blue")
@@ -156,7 +165,8 @@ plot_delay <- function(all_lags, lag_max = 15, nuts = 1){
   base_line_y <- mean(df_stat$y)
   
   # get plot
-  lag_plot <- all_lags_aux |>
+  lag_plot <- all_lags_aux |> 
+    filter(lag >= 0) |>
     ggplot(aes(x = lag-1))+
     geom_histogram(aes(y = after_stat(density),
                        fill = "Histogram"),
@@ -197,8 +207,10 @@ plot_delay <- function(all_lags, lag_max = 15, nuts = 1){
   
 }
 
+
+all_lags_list <- readRDS("files/all_lags_15.RData")
 for (i in 1:3){
-  # i = 1
+  i = 1
   plot_lag <- plot_delay(all_lags_list[[i]], nuts =i, lag_max = 15)
   ggsave(plot = plot_lag, filename = paste0("figs/small_plot_lag_lvl", i, ".png"),
          width = 20, height = 10, units = "cm")
@@ -241,6 +253,7 @@ dat_text <- data.frame(
 
 # get plot
 all_lags_aux |>
+  # filter(lvl == 3)|>
   ggplot(aes(x = lag-1))+
   facet_wrap(vars(lvl), nrow = 3)+
   geom_histogram(aes(y = after_stat(density),
@@ -298,7 +311,7 @@ shape_nuts_lvl <- sf::read_sf("data/GIS/NUTS/NUTS_RG_20M_2021_4326.shp") |>
   filter(CNTR_CODE == "DE")
 
 for (nuts in units_l1){
-  nuts = "DE5"
+  nuts = "DE4"
   nuts_name <- shape_nuts_lvl$NUTS_NAME[which(shape_nuts_lvl$NUTS_ID == nuts)]
   
   list_lags_nuts1[[nuts]] <- all_lags_lvl3 |>
@@ -309,12 +322,15 @@ for (nuts in units_l1){
   
   ggsave(plot = list_plots_nuts1[[nuts]],
          filename = paste0("figs/plot_lab_lvl1_",nuts,".png"),
-         width = 20, height = 8, units = "cm")
+         width = 20, height = 12, units = "cm")
   
 }
 
+View(list_lags_nuts1)
 
-# 4.1 Join small states ---------------------------------------------------
+
+
+ # 4.1 Join small states ---------------------------------------------------
 shape_nuts_lvl |> filter(LEVL_CODE == 1)
 
 #berlin brandenburg

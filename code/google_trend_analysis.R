@@ -24,6 +24,7 @@ shape_nuts_lvl <- sf::read_sf("data/GIS/NUTS/NUTS_RG_20M_2021_4326.shp") |>
   filter(CNTR_CODE == "DE",
          LEVL_CODE == 1)
 
+plot(terra::vect(shape_nuts_lvl))
 
 # 1. get data -------------------------------------------------------------
 
@@ -141,6 +142,12 @@ df_2022_join <- df_2022 |>
   select(date, nuts_id, Dürre) |>
   mutate(date = as.Date(date))
 
+df_2022_join
+
+for (i in 1:nrow(df_2022_join)){
+  df_2022_join$nuts_id[i] <- geos_nuts[[df_2022_join$nuts_id[i]]]
+}
+
 
 df_complete_gt <- full_join(df_complete, df_2022_join, 
                             by = c("date", "nuts_id")) |>
@@ -150,13 +157,75 @@ df_complete_gt <- full_join(df_complete, df_2022_join,
          week = lubridate::week(date),
          week = ifelse(week == 53, 52, week))|>
   group_by(year, week, nuts_id) |>
-  summarise_at(vars(Dürre), sum) |>
+  summarise_at(vars(Dürre), mean) |>
   mutate(index = Dürre/100) |>
-  select(-Dürre) 
+  select(-Dürre) |>
+  ungroup()
 
 
 saveRDS(df_complete_gt, "files/google_trends/complete_series.RData")
 
+
+
+# __get complete series for app -------------------------------------------
+
+gt_series <- expand_grid(date = seq(as.Date("2004-01-01"), as.Date("2022-12-31"), by = "day"),
+                         nuts_id = unique(df_complete_gt$nuts_id)) |>
+  mutate(year = lubridate::year(date),
+         week = lubridate::week(date),
+         week = ifelse(week == 53, 52, week)) |>
+  left_join(df_complete_gt, by = c("nuts_id", "week", "year"))
+
+#' DE2 - 2006 w36-39 missing (BY)
+#' DE5 missing (HB)
+
+
+# ____data HB -------------------------------------------------------------
+files_hb <- list.files("/Users/alencar/Library/CloudStorage/OneDrive-Personal/@_PostDoc/NLP_FlashDrought/NLP_r/code/python/gt_data/DE-HB",
+                       full.names = T)
+
+df_hb <- data.frame()
+for (file in files_hb) {
+  aux <- read.csv(file)
+  
+  df_hb <- rbind(df_hb,aux)
+}
+
+df_hb <- df_hb |>
+  select(-c(Dürre_unscaled:scale)) |>
+  mutate(year = lubridate::year(date),
+         week = lubridate::week(date),
+         week = ifelse(week == 53, 52, week)) |>
+  group_by(year, week) |>
+  summarise_at(vars(Dürre), mean) |>
+  mutate(index = Dürre/100) |>
+  select(-Dürre) |>
+  ungroup() |>
+  mutate(nuts_id = "DE5")
+
+
+# ____ data BY ------------------------------------------------------------
+
+#' not available
+
+
+# ____merge datasets ------------------------------------------------------
+
+gt_series_lvl1 <- left_join(gt_series, df_hb, by = c("year", "week", "nuts_id")) |>
+  mutate(index = ifelse(is.na(index.x), index.y, index.x),
+         index = ifelse(is.na(index), 0, index)) |>
+  select(-c(index.x, index.y)) 
+
+fd_data_1 <- readRDS("/Users/alencar/Library/CloudStorage/OneDrive-Personal/@_PostDoc/NLP_FlashDrought/NLP_r/files/ufz_full_series_lvl1.RData")|>
+  filter(lubridate::year(date) >= 2004) |>
+  select(date, nuts_id, fd_ratio) 
+
+gt_series_lvl1 <- left_join(gt_series_lvl1, fd_data_1, by = c("date", "nuts_id")) |>
+  select(-c(year, week))
+
+colnames(gt_series_lvl1) <- c("date", "nuts_id", "imp_ratio", "fd_ratio")
+
+saveRDS(gt_series_lvl1, "files/gt_full_series_lvl1.RData")
 
 # 3. delay analysis -------------------------------------------------------
 df_lvl1 <- readRDS(file = "files/ufz_full_series_lvl1.RData") |>
@@ -308,6 +377,11 @@ perc_df_gt <- get_perc_lvl_gt(df_imp_d, units_l1, thres = 0.8)
 
 lags_df_gt <- get_all_lags(perc_df_gt, units_l1,lag_max = 15)
 
+select_lag_gt <-lags_df_gt |>
+  filter(lag > 15 & lag <= 18) 
+
+sqrt(mean(select_lag$ccf, na.rm =T))
+
 test <- lags_df_gt |>
   filter(!is.na(ccf)) |>
   mutate(lag1 = lag-16) |>
@@ -341,7 +415,7 @@ plot_delay(test, nuts = 1, lag_max = 15)
 plot_delay_new <- function(all_lags, lag_max = 15, nuts = 1,
                            .adjust = 1){
   # all_lags = test
-  # all_lags = all_lags_list[[3]]
+  all_lags = all_lags_list[[3]]
   colors <- c("Histogram" = "#999999", 
               "Empiric PDF" = "#000000", 
               "Baseline" = "blue")
@@ -368,11 +442,15 @@ plot_delay_new <- function(all_lags, lag_max = 15, nuts = 1,
     ggplot(aes(x = lag))+
     geom_histogram(aes(y = after_stat(density),
                        fill = "Histogram"),
-                   bins = (lag_max+1), 
-                   color = "#999999",
-                   alpha = 0.5) +
+                   bins = (lag_max+1),
+                   color = "#888888",
+                   alpha = 0.8) +
+    # geom_vline(aes(xintercept = 0.3, color = "Baseline"),
+    #            linetype="dash",
+    #            linewidth = 1)+
     geom_density(aes(color = "Empiric PDF"),
-                 adjust = .adjust)+
+                 adjust = 1,
+                 linewidth = 0.5)+
     geom_hline(aes(color = "Baseline",
                    yintercept = base_line_y), 
                linetype="dotdash",
@@ -382,17 +460,18 @@ plot_delay_new <- function(all_lags, lag_max = 15, nuts = 1,
                        breaks = seq(0,0.2, 0.02))+
     scale_x_continuous(expand = c(0,0),
                        breaks = seq(0,lag_max,2))+
-    scale_color_manual("Legend",values = colors)+
+    scale_color_manual("",values = colors)+
     scale_fill_manual("", values=colors)+
     labs(x = "Delay (weeks)",
          y = "Density",
-         title = "Distribution of delay between FD onset and impact perception",
-         subtitle = paste0("Data aggregated into NUTS-", nuts),
-         caption = "Delay measured in weeks.
-                  Negative delays indicate baseline concern on droughts (blue line).",
-         tag = "Legend")+
+         # title = "Distribution of delay between FD onset and impact perception",
+         # subtitle = paste0("Data aggregated into NUTS-", nuts),
+         # caption = "Delay measured in weeks.
+         #          Negative delays indicate baseline concern on droughts (blue line).",
+         # tag = ""
+         )+
     theme_bw()+
-    theme(legend.position = 'right', 
+    theme(legend.position = 'none', 
           legend.spacing.x = unit(0.2, 'cm'),
           legend.spacing.y = unit(-0.2, 'cm'),
           legend.text = element_text(margin = margin(t = 0)),
@@ -400,39 +479,110 @@ plot_delay_new <- function(all_lags, lag_max = 15, nuts = 1,
           plot.tag = element_text(size = 11),
           plot.tag.position = c(0.895, 0.67),
           legend.box.spacing = unit(0.2, "cm"),
-          panel.grid.minor = element_blank())
+          panel.grid.minor = element_blank(),
+          plot.title = element_text(hjust =0, size = 16),
+          plot.subtitle = element_text(hjust =0, size = 12),
+          plot.caption = element_text(hjust =0, size = 12),
+          text = element_text(size = 16),
+          axis.title = element_text(size = 16),
+          axis.text = element_text(size = 16))
   
-  # lag_plot
+  lag_plot
   return(lag_plot)
   
 }
 
 gt_plot <- plot_delay_new(test, lag_max= 15, nuts = 1, .adjust = 0.5)
 gt_plot
-ggsave(plot = gt_plot, filename = paste0("figs/small_plot_lag_lvl1_gt.png"),
-       width = 20, height = 10, units = "cm")
+ggsave(plot = lag_plot, filename = paste0("figs/small_plot_lag_lvl1_gt_new.png"),
+       width = 22, height = 10, units = "cm")
 
 
 for (i in 1:3){
   # i = 3
   plot_lag <- plot_delay_new(all_lags_list[[i]], nuts =i, lag_max = 15,
-                             .adjust = 0.5)
-  plot_lag
-  ggsave(plot = plot_lag, filename = paste0("figs/small_plot_lag_lvl", i, "_op.png"),
+                             .adjust = 0.75)
+  # plot_lag
+  ggsave(plot = plot_lag, filename = paste0("figs/small_plot_lag_lvl", i, "_op2.png"),
          width = 20, height = 10, units = "cm")
 }
 
 
-# 
-# df_imp_d |>
-#   mutate(date = as.Date(paste(year, week, 1, sep="-"), "%Y-%U-%u")) |>
-#   filter(nuts_id == "DE1") |>
-#   ggplot(aes(x = date))+
-#   geom_line(aes(y = fd_ratio))+
-#   geom_line(aes(y = imp_ratio), color = "blue")+
-#   theme_bw()
-# 
-# 
-# 
-# read.csv("code/python/serpwow_google_trends_geos.csv") |>
-#   filter(children_children_name == "Berlin")
+# simple plot to get nice legend
+df_aux <- data.frame(x = c(1,2), `Empiric PDF`= c(1,2), Baseline = c(2,3), `Peak~Corr.` = c(3, 4)) |>
+  pivot_longer(cols = 2:4) |>
+  mutate(col = "Histogram")
+
+df_aux$name[df_aux$name == "Empiric.PDF"] <- "Empiric PDF"
+df_aux$name[df_aux$name == "Peak.Corr."] <- "Peak Correlation"
+
+ggplot(df_aux, aes(x = x, y = value, color = name, linetype = name))+
+  geom_line(linewidth = 1)+
+  scale_color_manual("Legend", values=c( "blue","black", "red"))+
+  scale_linetype_manual("Legend", values = c( "dotdash","solid", "dashed"))+
+  geom_histogram(inherit.aes = F,
+                 data = df_aux,
+                 aes(x = x,
+                     y = after_stat(x),
+                     fill = col),
+                 bins = (2+1),
+                 color = "transparent",
+                 alpha = 0.8)+
+  scale_fill_manual("Legend", values=c("grey"))+
+  theme_bw()
+
+ggsave(filename = "figs/aux.png",
+       width = 20, height = 10, units = "cm")
+
+# 4. term comparison ------------------------------------------------------
+
+df <- read.csv("data/multiTimeline.csv", skip=1) |>
+  set_names(c("date", "Dürre", "Blitzdürre")) |>
+  mutate(date = paste0(date, "-01"),
+         date = as.Date(date)) |>
+  pivot_longer(2:3, names_to = "term", values_to = "interest") |>
+  mutate(interest = ifelse(interest == "<1", 0.5, interest),
+         interest = as.numeric(interest)) 
+
+tail(df)
+
+ggplot(df, aes(x = date, y = interest, color = term))+
+  geom_path(linewidth = 1.5)+
+  scale_x_date(name = "Date", expand = c(0,0), 
+               breaks = seq.Date(from = as.Date("2004-01-01"),
+                                 to = as.Date("2023-12-31"),
+                                 by = "4 years"),
+               date_labels = "%Y")+
+  scale_y_continuous(name = "Google trends index", expand = c(0,0),
+                     limits = c(0,100), breaks = seq(0,100,20))+
+  # scale_color_viridis_d("Term", option = "H")+
+  scale_color_grey("Term", start = 0.3, end = 0.6)+
+  theme_bw()+
+  theme(strip.text.x = element_blank(),
+        strip.background = element_rect(colour="white", fill="white"),
+        legend.position=c(.1,.75),
+        legend.box.background = element_rect(colour = "black"),
+        plot.title = element_text(hjust =0, size = 16),
+        plot.subtitle = element_text(hjust =0, size = 12),
+        plot.caption = element_text(hjust =0, size = 12),
+        text = element_text(size = 16))
+
+
+ggsave("figs/gt_comparison.png", units = "cm", 
+       width = 20, height = 10)  
+ 
+  
+     ratio_gt <- df |>
+  pivot_wider(names_from = "term", values_from = "interest") |>
+  mutate(ratio = Blitzdürre/Dürre) 
+
+ratio_gt |>
+  mutate(year = lubridate::year(date)) |>
+  group_by(year) |>
+  filter(year >= 2020) |>
+  summarise_all(mean, na.trm = T) |>
+  select(-date) |>
+  # View() |>
+  colSums()
+  
+  
