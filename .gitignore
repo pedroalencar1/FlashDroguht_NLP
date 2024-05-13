@@ -54,3 +54,4 @@ figs/
 files/
 data/
 .DS_Store
+!files/*.RData

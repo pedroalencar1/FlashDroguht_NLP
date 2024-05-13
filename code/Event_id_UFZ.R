@@ -143,6 +143,8 @@ terra::plot(ufz_fd_pentad[[3100]])
 
 ufz_fd_pentad <- rast("files/ufz_fd_pentad.nc")
 
+plot(ufz_fd_pentad[[1]])
+
 # 4. Get prevalence at each level -----------------------------------------
 
 # get shape into same projection of raster
@@ -176,6 +178,13 @@ crs(ufz_fd_impact) <- crs(shape_nuts)
 plot(ufz_fd_impact[[10]], 
      fun=function(){plot(vect(shape_nuts_1), add=TRUE)} 
      )
+
+writeCDF(ufz_fd_impact, "files/ufz_fd_impact_pentad.nc",
+         varname = "is_fd",
+         unit = "none", 
+         overwrite = T)
+
+
 
 # function to export data of FD prevalence as dataframe
 get_prevalence_fd <- function(spat_raster, shape_nuts, level){
@@ -427,4 +436,34 @@ ggplot(fd, aes(x = year, y = ratio_fd*100))+
 ggsave("figs/trend_area_fd.png",
        units = "cm",
        width = 14, height = 8)
-   
+
+
+# 7. export FD dataset ----------------------------------------------------
+
+r_fd <- rast("files/ufz_fd_impact_pentad.nc")
+
+bb <- shape_nuts_1 |>
+  filter(NUTS_ID %in% c("DE3", "DE4"))
+
+spree <- terra::vect("/Users/alencar/Downloads/Spree-subcatchments.gpkg")
+plot(r_fd[[1]])
+spree_reproj <- terra::project(spree, r_fd)
+
+spree_fd <- terra::crop(r_fd, spree_reproj)
+spree_fd <- terra::mask(spree_fd, spree_reproj)
+
+writeCDF(spree_fd, 
+         filename = "files/spree_fd_ford.nc", 
+         overwrite = T, 
+         varname = "is_fd")
+
+
+bbr_fd <- terra::crop(r_fd, bb)
+bbr_fd <- terra::mask(bbr_fd, bb)
+
+writeCDF(bbr_fd, 
+         filename = "files/bbr_fd_ford.nc", 
+         overwrite = T, 
+         varname = "is_fd")
+
+
