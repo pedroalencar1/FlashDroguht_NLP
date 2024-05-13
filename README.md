@@ -1,18 +1,17 @@
 # Use of NPL and news papers articles to assess flash drought impacts
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.11185331.svg)](https://doi.org/10.5281/zenodo.11185331)
+
+
 **Project structure**
 
   - code: R scripts
   - python: python scripts and their dependencies
-  - figs: all graphical outputs from R
-  - files: all non-graphical outputs from R
-  - data: all external data sources
-  - results: reports and presentations
+  - files: contains all data necessary for processing and replicating results
+  - app: contains all scripts and data necessary to run the `shiny` app *PerceptionFD*
 
 **Goals**
   
   - Identify, on a german level, FD events
-  - Assess impacts of droughts through data analysis, using NPL data from Mariana Brito
-  - Find possible correlations and temporal delays
-  - relate impact to FD intensity and severity
+  - Assess impacts of droughts through data analysis, using NPL and digital trace data
   
