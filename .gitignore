@@ -6,6 +6,7 @@
 .RData
 .RDataTmp
 
+
 # User-specific files
 .Ruserdata
 
@@ -51,7 +52,14 @@ rsconnect/
 
 #folders
 figs/
-files/
+files/UFZ_top_soil_combined/
 data/
 .DS_Store
-!files/*.RData
+
+#formats
+*.nc
+*.csv
+*.prj
+*.dbf
+*.shp
+*.shx
